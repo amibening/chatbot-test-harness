@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Tools - Chatbot Persistence</title>
+    <style>
+        body { font-family: monospace; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .test { background: #f0f0f0; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .pass { background: #d4edda; border-left: 4px solid #28a745; }
+        .fail { background: #f8d7da; border-left: 4px solid #dc3545; }
+        .info { background: #d1ecf1; border-left: 4px solid #0c5460; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; }
+        pre { background: #fff; padding: 10px; overflow-x: auto; }
+        h2 { color: #333; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Chatbot Persistence Diagnostic Tool</h1>
+    <p>This page helps diagnose why conversations aren't persisting between browser sessions.</p>
+
+    <div id="results"></div>
+
+    <h2>Actions:</h2>
+    <button onclick="runTests()">🔍 Run All Tests</button>
+    <button onclick="testWrite()">✍️ Test Write</button>
+    <button onclick="testRead()">📖 Test Read</button>
+    <button onclick="clearStorage()">🗑️ Clear Storage</button>
+    <button onclick="location.href='/'">← Back to Chat</button>
+
+    <script>
+        const results = document.getElementById('results');
+
+        function addResult(title, status, message, data = null) {
+            const div = document.createElement('div');
+            div.className = `test ${status}`;
+            div.innerHTML = `
+                <h3>${title}</h3>
+                <p>${message}</p>
+                ${data ? `<pre>${data}</pre>` : ''}
+            `;
+            results.appendChild(div);
+        }
+
+        function runTests() {
+            results.innerHTML = '';
+            
+            // Test 1: Check if localStorage is available
+            addResult(
+                '1. localStorage Available?',
+                typeof(Storage) !== "undefined" ? 'pass' : 'fail',
+                typeof(Storage) !== "undefined" ? 
+                    '✅ localStorage is supported by your browser' : 
+                    '❌ localStorage is NOT supported'
+            );
+
+            // Test 2: Check current session ID
+            const sessionId = localStorage.getItem('chatbot_session_id');
+            addResult(
+                '2. Current Session ID',
+                sessionId ? 'pass' : 'info',
+                sessionId ? 
+                    `✅ Session ID found: ${sessionId}` : 
+                    'ℹ️ No session ID stored yet (this is normal for first visit)',
+                sessionId
+            );
+
+            // Test 3: List all localStorage keys
+            const keys = Object.keys(localStorage);
+            addResult(
+                '3. All localStorage Keys',
+                keys.length > 0 ? 'info' : 'info',
+                keys.length > 0 ? 
+                    `Found ${keys.length} key(s) in localStorage` : 
+                    'localStorage is empty',
+                keys.length > 0 ? JSON.stringify(keys, null, 2) : null
+            );
+
+            // Test 4: Test write/read cycle
+            const testKey = 'test_' + Date.now();
+            const testValue = 'test_data_' + Math.random();
+            try {
+                localStorage.setItem(testKey, testValue);
+                const retrieved = localStorage.getItem(testKey);
+                localStorage.removeItem(testKey);
+                
+                addResult(
+                    '4. Write/Read Test',
+                    retrieved === testValue ? 'pass' : 'fail',
+                    retrieved === testValue ?
+                        '✅ localStorage read/write works correctly' :
+                        '❌ localStorage read/write FAILED'
+                );
+            } catch(e) {
+                addResult(
+                    '4. Write/Read Test',
+                    'fail',
+                    `❌ Error: ${e.message}`
+                );
+            }
+
+            // Test 5: Check browser mode
+            const isPrivate = !localStorage || localStorage.length === 0;
+            addResult(
+                '5. Browser Mode',
+                'info',
+                '⚠️ Cannot reliably detect Incognito/Private mode, but if localStorage doesn\'t persist after closing browser, you may be in private mode.'
+            );
+
+            // Test 6: Check for saved conversations on server
+            checkServerConversations();
+        }
+
+        async function checkServerConversations() {
+            const sessionId = localStorage.getItem('chatbot_session_id');
+            if (!sessionId) {
+                addResult(
+                    '6. Server Check',
+                    'info',
+                    'ℹ️ No session ID to check on server'
+                );
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/session/load?session_id=${sessionId}`);
+                const data = await res.json();
+                
+                addResult(
+                    '6. Server Conversation Check',
+                    data.loaded ? 'pass' : 'info',
+                    data.loaded ? 
+                        `✅ Found saved conversation with ${data.history.length} messages` :
+                        'ℹ️ No saved conversation found on server for this session ID',
+                    JSON.stringify(data, null, 2)
+                );
+            } catch(e) {
+                addResult(
+                    '6. Server Check',
+                    'fail',
+                    `❌ Error connecting to server: ${e.message}`
+                );
+            }
+        }
+
+        function testWrite() {
+            const testId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            try {
+                localStorage.setItem('chatbot_session_id', testId);
+                addResult(
+                    'Write Test',
+                    'pass',
+                    `✅ Wrote session ID: ${testId}`,
+                    'Now close this tab, reopen it, and click "Test Read" to see if it persists.'
+                );
+            } catch(e) {
+                addResult('Write Test', 'fail', `❌ Failed: ${e.message}`);
+            }
+        }
+
+        function testRead() {
+            const stored = localStorage.getItem('chatbot_session_id');
+            addResult(
+                'Read Test',
+                stored ? 'pass' : 'fail',
+                stored ? 
+                    `✅ Session ID found: ${stored}` :
+                    '❌ No session ID found! localStorage was cleared.',
+                stored ? 'If you see this after closing/reopening browser, persistence WORKS!' : 'localStorage was cleared between sessions.'
+            );
+        }
+
+        function clearStorage() {
+            if (confirm('Clear localStorage and start fresh?')) {
+                localStorage.clear();
+                addResult('Clear Storage', 'pass', '✅ localStorage cleared');
+            }
+        }
+
+        // Auto-run tests on page load
+        window.onload = runTests;
+    </script>
+</body>
+</html>
+

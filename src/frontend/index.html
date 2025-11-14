@@ -1,0 +1,254 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Chatbot Test Harness</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 40px; }
+    .container { max-width: 760px; margin: 0 auto; }
+    textarea { width: 100%; min-height: 120px; padding: 10px; font-size: 16px; }
+    button { padding: 10px 16px; font-size: 16px; margin-top: 8px; }
+    .bubble { border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+    .user { background: #eef; align-self: flex-end; }
+    .assistant { background: #efe; }
+    .chat { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
+    .row { display: flex; gap: 8px; }
+    #reload-btn { position: fixed; top: 10px; left: 10px; padding: 6px 10px; font-size: 14px; background: #ddd; border-radius: 6px; cursor: pointer; }
+    #clear-btn { position: fixed; top: 10px; left: 160px; padding: 6px 10px; font-size: 14px; background: #ffebeb; border-radius: 6px; cursor: pointer; border: 1px solid #ffcccc; }
+
+    #loading-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      color: #333;
+      z-index: 1000;
+      pointer-events: none;
+    }
+    #loading-overlay:not(.hidden) {
+      pointer-events: all;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="loading-overlay">🔄 Server starting... please wait</div>
+  <button id="reload-btn">🔄 Reload Config</button>
+  <button id="clear-btn">🗑️ Clear Chat</button>
+
+  <div class="container">
+    <h1>Chatbot Test Harness</h1>
+    <p>Model configurable via <code>.env</code></p>
+
+    <div class="row">
+      <textarea id="message" placeholder="Ask me something..."></textarea>
+    </div>
+    <button id="send">Send</button>
+
+    <div id="chat" class="chat"></div>
+  </div>
+
+  <script>
+    const sendBtn = document.getElementById('send');
+    const reloadBtn = document.getElementById('reload-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const input = document.getElementById('message');
+    const chat = document.getElementById('chat');
+    const overlay = document.getElementById('loading-overlay');
+    
+    // Store conversation history and session ID
+    let conversationHistory = [];
+    let sessionId = localStorage.getItem('chatbot_session_id') || generateSessionId();
+    
+    // Generate a unique session ID
+    function generateSessionId() {
+      const id = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('chatbot_session_id', id);
+      return id;
+    }
+
+    async function loadSavedConversation() {
+      try {
+        console.log(`📂 Requesting conversation for session: ${sessionId}`);
+        const res = await fetch(`/api/session/load?session_id=${sessionId}`);
+        
+        if (res.ok) {
+          const data = await res.json();
+          console.log('📨 Server response:', data);
+          
+          if (data.loaded && data.history.length > 0) {
+            conversationHistory = data.history;
+            console.log(`✅ Successfully loaded ${data.history.length} messages from disk`);
+            
+            // Display loaded messages
+            for (const msg of data.history) {
+              addBubble(msg.content, msg.role === 'user' ? 'user' : 'assistant');
+            }
+            addBubble(`💾 Restored conversation with ${data.history.length} messages`, 'assistant');
+          } else {
+            console.log(`ℹ️ No saved conversation found. Starting fresh.`);
+            addBubble('✅ Backend ready! Starting fresh conversation.', 'assistant');
+          }
+        } else {
+          console.log(`❌ Failed to load session. Status: ${res.status}`);
+          addBubble('✅ Backend ready! Starting fresh conversation.', 'assistant');
+        }
+      } catch (e) {
+        console.error('❌ Error loading conversation:', e);
+        addBubble('✅ Backend ready! Starting fresh conversation.', 'assistant');
+      }
+    }
+
+    async function waitForServer() {
+      console.log('🔍 Checking server status...');
+      console.log('📌 Session ID:', sessionId);
+      
+      // Fallback: hide overlay after 5 seconds no matter what
+      setTimeout(() => {
+        if (!overlay.classList.contains('hidden')) {
+          overlay.classList.add('hidden');
+          console.log('⏰ Overlay auto-hidden after timeout');
+        }
+      }, 5000);
+
+      for (let i = 0; i < 30; i++) {
+        try {
+          // Use health check endpoint instead of calling OpenAI
+          const res = await fetch('/api/health');
+          console.log(`✓ Server check attempt ${i+1}: ${res.status}`);
+          
+          if (res.ok) {
+            overlay.classList.add('hidden');
+            
+            // Load saved conversation after server is ready
+            console.log('🔄 Attempting to load saved conversation...');
+            await loadSavedConversation();
+            return;
+          }
+        } catch (e) {
+          console.log(`✗ Server check attempt ${i+1} failed:`, e.message);
+        }
+        await new Promise(r => setTimeout(r, 1000));
+      }
+      
+      console.log('⚠️ Server did not respond after 30 attempts');
+      overlay.textContent = '⚠️ Could not connect to server. Refresh the page to try again.';
+      setTimeout(() => overlay.classList.add('hidden'), 3000);
+    }
+
+    function addBubble(text, cls) {
+      const div = document.createElement('div');
+      div.className = 'bubble ' + cls;
+      div.textContent = text;
+      chat.appendChild(div);
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }
+
+    async function sendMessage() {
+      const msg = input.value.trim();
+      if (!msg) return;
+      addBubble(msg, 'user');
+      input.value = '';
+      
+      try {
+        console.log(`📤 Sending message with session: ${sessionId}`);
+        
+        // Send message with full conversation history and session ID (like ChatGPT)
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            message: msg,
+            history: conversationHistory,
+            session_id: sessionId
+          })
+        });
+        
+        if (!res.ok) {
+          const err = await res.json().catch(()=>({detail: res.statusText}));
+          throw new Error(err.detail || 'Request failed');
+        }
+        
+        const data = await res.json();
+        addBubble(data.reply, 'assistant');
+        
+        // Update conversation history (like ChatGPT)
+        conversationHistory.push({ role: 'user', content: msg });
+        conversationHistory.push({ role: 'assistant', content: data.reply });
+        
+        console.log(`💾 Conversation saved! Total messages: ${conversationHistory.length}`);
+        console.log(`📂 Saved to: memory_store/${sessionId}.json`);
+        
+      } catch (e) {
+        const errorMsg = 'Error: ' + (e.message || e);
+        addBubble(errorMsg, 'assistant');
+        console.error('❌ Error sending message:', e);
+      }
+    }
+
+    async function reloadConfig() {
+      overlay.classList.remove('hidden');
+      overlay.textContent = '🔄 Reloading configuration...';
+      try {
+        const res = await fetch('/api/reload_config', { method: 'POST' });
+        if (!res.ok) throw new Error('Reload failed');
+        const data = await res.json();
+        overlay.textContent = '✅ ' + (data.message || 'Reloaded successfully!');
+        setTimeout(() => overlay.classList.add('hidden'), 2000);
+      } catch (e) {
+        overlay.textContent = '⚠️ Error reloading config: ' + (e.message || e);
+      }
+    }
+
+    async function clearChat() {
+      const oldSessionId = sessionId;
+      
+      if (confirm('Clear all chat history?\n\nThis will:\n• Delete the saved conversation from disk\n• Start a completely fresh conversation\n• Generate a new session ID\n\nYour current conversation will be permanently deleted.')) {
+        try {
+          console.log(`🗑️ Deleting session: ${oldSessionId}`);
+          
+          // Delete old session from server
+          const res = await fetch(`/api/session/delete?session_id=${oldSessionId}`, { method: 'DELETE' });
+          if (res.ok) {
+            console.log(`✅ Session ${oldSessionId} deleted from server`);
+          }
+          
+          // Generate new session ID
+          sessionId = generateSessionId();
+          conversationHistory = [];
+          chat.innerHTML = '';
+          
+          console.log(`🆕 New session created: ${sessionId}`);
+          console.log(`📌 Session ID stored in localStorage`);
+          addBubble('🗑️ Chat cleared! Starting fresh conversation.', 'assistant');
+          addBubble('💡 Your new conversations will now be saved to this session.', 'assistant');
+          
+        } catch (e) {
+          console.error('❌ Failed to delete session on server:', e);
+          // Still clear locally even if server delete fails
+          sessionId = generateSessionId();
+          conversationHistory = [];
+          chat.innerHTML = '';
+          addBubble('💬 Chat cleared! Starting fresh conversation.', 'assistant');
+        }
+      } else {
+        console.log('ℹ️ Clear chat cancelled by user');
+      }
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendMessage();
+    });
+    reloadBtn.addEventListener('click', reloadConfig);
+    clearBtn.addEventListener('click', clearChat);
+    waitForServer();
+  </script>
+</body>
+</html>
