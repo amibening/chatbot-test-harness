@@ -5,6 +5,14 @@
 
 echo "🛠️  Setting up Chatbot Test Harness environment..."
 
+# FastAPI + uv rely on Python 3.10+
+python3 - <<'EOF'
+import sys
+if sys.version_info < (3,10):
+    print("❌ Python 3.10+ is required")
+    sys.exit(1)
+EOF
+
 # 1️⃣ Navigate to the project root (the script's directory)
 cd "$(dirname "$0")" || exit 1
 
@@ -17,7 +25,7 @@ fi
 # 3️⃣ Create virtual environment if missing
 if [ ! -d ".venv" ]; then
   echo "📦 Creating new virtual environment..."
-  uv venv
+  uv venv .venv
 else
   echo "✅ Virtual environment already exists."
 fi

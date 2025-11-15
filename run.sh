@@ -50,7 +50,9 @@ fi
 PID=$(lsof -ti :8000)
 if [ -n "$PID" ]; then
   echo "Killing old process on port 8000 (PID: $PID)..."
-  kill -9 "$PID"
+  kill "$PID"
+  sleep 1
+  kill -9 "$PID" 2>/dev/null
 fi
 
 # 7️⃣ Find a free port if 8000 is still taken
