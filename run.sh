@@ -1,89 +1,84 @@
 #!/bin/bash
 # =====================================================
-# Chatbot Test Harness FastAPI Launcher
+# Chatbot Test Harness FastAPI Launcher (Clean Version)
 # =====================================================
 
-# 1️⃣ Ensure we're in the correct project directory
+set -e  # Exit immediately on error
+
+echo "🚀 Launching Chatbot Test Harness..."
+
+# 1️⃣ Ensure we're in the project root
 cd "$(dirname "$0")" || exit 1
 
-# 2️⃣ Check if virtual environment exists
+# 2️⃣ Validate virtual environment
 if [ ! -d ".venv" ]; then
-  echo "⚠️  Virtual environment not found!"
-  echo "Please run: ./setup_env.sh first"
+  echo "❌ Virtual environment not found!"
+  echo "Run: ./setup_env.sh"
   exit 1
 fi
 
-# 3️⃣ Check if .env file exists
+# 3️⃣ Validate .env
 if [ ! -f ".env" ]; then
-  echo "⚠️  .env file not found!"
-  echo ""
-  echo "Please create a .env file with your configuration:"
-  echo ""
-  echo "cat > .env << EOF"
-  echo "OPENAI_API_KEY=sk-your-api-key-here"
-  echo "SYSTEM_PROMPT=You are a helpful assistant."
-  echo "OPENAI_MODEL=gpt-4o-mini"
-  echo "ENABLE_CONTEXT=true"
-  echo "EOF"
-  echo ""
+  echo "❌ .env file missing!"
+  echo "Create one using: cp env.example .env"
   exit 1
 fi
 
-# 4️⃣ Create memory_store directory if needed
-if [ ! -d "memory_store" ]; then
-  echo "📁 Creating memory_store directory..."
-  mkdir -p memory_store
-fi
-
-# 5️⃣ Make sure src/backend is a proper Python package
-if [ ! -f "src/__init__.py" ]; then
-  echo "Creating missing __init__.py in src/..."
-  touch src/__init__.py
-fi
-
-if [ ! -f "src/backend/__init__.py" ]; then
-  echo "Creating missing __init__.py in src/backend/..."
-  touch src/backend/__init__.py
-fi
-
-# 6️⃣ Kill any old Uvicorn process using port 8000
-PID=$(lsof -ti :8000)
-if [ -n "$PID" ]; then
-  echo "Killing old process on port 8000 (PID: $PID)..."
-  kill "$PID"
-  sleep 1
-  kill -9 "$PID" 2>/dev/null
-fi
-
-# 7️⃣ Find a free port if 8000 is still taken
-PORT=8000
-if lsof -i :$PORT > /dev/null 2>&1; then
-  for p in $(seq 8001 8010); do
-    if ! lsof -i :$p > /dev/null 2>&1; then
-      PORT=$p
-      break
-    fi
-  done
-  echo "⚠️  Port 8000 in use, switching to $PORT"
-fi
-
-# 8️⃣ Activate virtual environment and start the FastAPI app
-echo "🚀 Starting FastAPI server on http://127.0.0.1:$PORT ..."
+# 4️⃣ Activate virtual environment
 source .venv/bin/activate
-PYTHONPATH=src uvicorn backend.main:app --reload --port $PORT &
 
-# Save the background process ID
+# 5️⃣ Check uvicorn availability
+if ! command -v uvicorn >/dev/null 2>&1; then
+  echo "❌ uvicorn is not installed in the virtual environment!"
+  exit 1
+fi
+
+# 6️⃣ Ensure module entrypoint exists
+if [ ! -f "src/backend/main.py" ]; then
+  echo "❌ src/backend/main.py not found!"
+  echo "Expected FastAPI app at: src/backend/main.py"
+  exit 1
+fi
+
+# 7️⃣ Ensure Python package structure
+mkdir -p src backend src/backend memory_store
+touch src/__init__.py src/backend/__init__.py
+
+# 8️⃣ Find free port
+BASE_PORT=8000
+PORT=$BASE_PORT
+
+for p in $(seq $BASE_PORT 8010); do
+    if ! lsof -i :$p >/dev/null 2>&1; then
+        PORT=$p
+        break
+    fi
+done
+
+if [ "$PORT" != "$BASE_PORT" ]; then
+    echo "⚠️  Port 8000 unavailable — using port $PORT"
+fi
+
+# 9️⃣ Export Python path
+export PYTHONPATH=src
+
+# 🔟 Start FastAPI server
+echo "🌐 Starting FastAPI server on http://127.0.0.1:$PORT"
+uvicorn backend.main:app --reload --port "$PORT" &
 UVICORN_PID=$!
 
-# 9️⃣ Wait a moment for the server to start
-sleep 3
+# 1️⃣1️⃣ Wait a moment for the server to start
+sleep 2
 
-# 🔟 Automatically open browser (macOS and Linux)
+# 1️⃣2️⃣ Auto-open browser (macOS / Linux)
+URL="http://127.0.0.1:$PORT"
+
 if command -v open >/dev/null 2>&1; then
-  open "http://127.0.0.1:$PORT"
+  open "$URL"
 elif command -v xdg-open >/dev/null 2>&1; then
-  xdg-open "http://127.0.0.1:$PORT"
+  xdg-open "$URL"
 fi
 
-# 1️⃣1️⃣ Bring Uvicorn logs to the foreground
+# 1️⃣3️⃣ Forward logs and keep process in foreground
+trap "echo ''; echo '🛑 Shutting down...'; kill $UVICORN_PID" SIGINT SIGTERM
 wait $UVICORN_PID

@@ -1,40 +1,43 @@
 #!/bin/bash
 # =====================================================
 # Chatbot Test Harness — Environment Setup Script
+# Clean, modern, safe version
 # =====================================================
+
+set -e  # Exit immediately on error
 
 echo "🛠️  Setting up Chatbot Test Harness environment..."
 
-# FastAPI + uv rely on Python 3.10+
+# 1️⃣ Navigate to project root
+cd "$(dirname "$0")" || exit 1
+
+# 2️⃣ Ensure Python version is valid
 python3 - <<'EOF'
 import sys
 if sys.version_info < (3,10):
-    print("❌ Python 3.10+ is required")
+    print("❌ Python 3.10+ is required for FastAPI + uv")
     sys.exit(1)
 EOF
 
-# 1️⃣ Navigate to the project root (the script's directory)
-cd "$(dirname "$0")" || exit 1
-
-# 2️⃣ Check for uv installation
+# 3️⃣ Ensure uv is installed
 if ! command -v uv &> /dev/null; then
-  echo "⚠️  'uv' not found. Installing with pip..."
+  echo "⚠️  'uv' not found — installing..."
   pip install uv || { echo "❌ Failed to install uv"; exit 1; }
 fi
 
-# 3️⃣ Create virtual environment if missing
+# 4️⃣ Create virtual environment (force .venv)
 if [ ! -d ".venv" ]; then
-  echo "📦 Creating new virtual environment..."
+  echo "📦 Creating virtual environment at .venv..."
   uv venv .venv
 else
   echo "✅ Virtual environment already exists."
 fi
 
-# 4️⃣ Activate the environment
+# 5️⃣ Activate venv
 echo "⚙️  Activating virtual environment..."
 source .venv/bin/activate
 
-# 5️⃣ Install dependencies
+# 6️⃣ Install dependencies
 if [ -f "pyproject.toml" ]; then
   echo "📜 Installing dependencies from pyproject.toml..."
   uv sync
@@ -42,14 +45,15 @@ elif [ -f "requirements.txt" ]; then
   echo "📜 Installing dependencies from requirements.txt..."
   uv pip install -r requirements.txt
 else
-  echo "⚙️  Installing base dependencies manually..."
+  echo "📦 Installing minimal dependencies..."
   uv pip install fastapi uvicorn python-dotenv openai
 fi
 
-# 6️⃣ Verify installation
-echo "🔍 Checking key packages..."
+# 7️⃣ Validate imports
+echo "🔍 Validating installed packages..."
 python - <<'PYCODE'
 import sys
+
 packages = {
     "fastapi": "fastapi",
     "uvicorn": "uvicorn",
@@ -57,77 +61,63 @@ packages = {
     "openai": "openai",
 }
 
+missing = False
 for label, import_name in packages.items():
     try:
         __import__(import_name)
         print(f"✅ {label} installed")
     except ImportError:
-        print(f"❌ {label} missing (failed to import {import_name})")
-        sys.exit(1)
+        print(f"❌ {label} missing (import failed for: {import_name})")
+        missing = True
+
+if missing:
+    sys.exit(1)
 PYCODE
 
-
-# 7️⃣ Check for .env file
+# 8️⃣ Check for .env file
 echo ""
-echo "🔍 Checking for .env configuration file..."
+echo "🔍 Checking for .env..."
+
 if [ ! -f ".env" ]; then
-  echo ""
-  echo "⚠️  =========================================="
-  echo "⚠️  IMPORTANT: .env file not found!"
-  echo "⚠️  =========================================="
-  echo ""
-  echo "📋 You need to create a .env file before running the app."
-  echo ""
-  echo "Quick Setup:"
-  echo "------------"
-  echo "1. Copy the example file:"
-  echo "   cp env.example .env"
-  echo ""
-  echo "2. Edit .env and add your OpenAI API key:"
-  echo "   nano .env"
-  echo "   (or use your preferred editor)"
-  echo ""
-  echo "3. Required configuration:"
-  echo "   OPENAI_API_KEY=sk-your-actual-api-key-here"
-  echo "   SYSTEM_PROMPT=You are a helpful assistant."
-  echo "   OPENAI_MODEL=gpt-4o-mini"
-  echo "   ENABLE_CONTEXT=true"
-  echo ""
-  echo "📚 For detailed instructions, see:"
-  echo "   • README.md (Quick Start section)"
-  echo "   • docs/QUICKSTART.md"
-  echo ""
-  echo "🔑 Get your OpenAI API key from:"
-  echo "   https://platform.openai.com/api-keys"
-  echo ""
-  echo "⚠️  The app will NOT work without a valid .env file!"
-  echo ""
+cat <<EOF
+
+❌ .env file not found!
+
+Create one using:
+
+   cp env.example .env
+   nano .env
+
+Required keys:
+
+   OPENAI_API_KEY=sk-xxxx...
+   SYSTEM_PROMPT=You are a helpful assistant.
+   OPENAI_MODEL=gpt-4o-mini
+   ENABLE_CONTEXT=true
+
+EOF
 else
-  echo "✅ .env file found"
-  
-  # Check if API key is set (not the example value)
-  if grep -q "sk-your-api-key-here" .env 2>/dev/null || ! grep -q "OPENAI_API_KEY=sk-" .env 2>/dev/null; then
-    echo ""
-    echo "⚠️  WARNING: OPENAI_API_KEY may not be configured correctly"
-    echo "   Please edit .env and add your actual OpenAI API key"
-    echo "   Get your key from: https://platform.openai.com/api-keys"
-    echo ""
+  echo "✅ .env found"
+
+  # Validate OPENAI_API_KEY (must start with sk- but not be placeholder)
+  KEY=$(grep -E '^OPENAI_API_KEY=' .env | cut -d'=' -f2)
+
+  if [[ -z "$KEY" || "$KEY" == "sk-your-api-key-here" ]]; then
+    echo "⚠️  OPENAI_API_KEY appears to be missing or placeholder"
   else
-    echo "✅ OPENAI_API_KEY appears to be configured"
+    echo "🔑 OPENAI_API_KEY is configured"
   fi
 fi
 
-# 8️⃣ Final message
+# 9️⃣ Final message
 echo ""
 echo "🎯 Environment setup complete!"
 echo ""
-if [ -f ".env" ] && grep -q "OPENAI_API_KEY=sk-" .env 2>/dev/null && ! grep -q "sk-your-api-key-here" .env 2>/dev/null; then
-  echo "✅ Ready to run! Start the app with:"
-  echo ""
-  echo "   ./run.sh"
+
+if [[ -n "$KEY" && "$KEY" != "sk-your-api-key-here" ]]; then
+  echo "✅ Ready to run: ./run.sh"
 else
-  echo "⏳ Next steps:"
-  echo "   1. Create and configure your .env file (see above)"
-  echo "   2. Then run: ./run.sh"
+  echo "⏳ Fix your .env file, then run: ./run.sh"
 fi
+
 echo ""
