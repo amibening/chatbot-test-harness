@@ -3,11 +3,13 @@ name = "chatbot-test-harness"
 version = "1.0.0"
 description = "ChatGPT-like conversational AI with full persistence"
 readme = "README.md"
-requires-python = ">=3.8"
-license = {text = "MIT"}
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
 authors = [
-    {name = "Ami Bening", email = "ami.bening@jest.co.uk"}
+    { name = "Ami Bening", email = "ami.bening@jest.co.uk" }
 ]
+
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
@@ -16,23 +18,25 @@ dependencies = [
     "pydantic>=2.0.0",
 ]
 
+# Optional dependencies (modern format)
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "httpx>=0.27.0",
 ]
 
+# Correct build system
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# Tells Hatch which package directory to include
+# FIX FOR ISSUE 1 — tells hatch exactly which code directory to package
 [tool.hatch.build.targets.wheel]
 packages = ["src/backend"]
 
-[tool.uv]
-dev-dependencies = [
+# Modern uv-style dependency groups
+[dependency-groups]
+dev = [
     "pytest>=8.0.0",
     "httpx>=0.27.0",
 ]
-

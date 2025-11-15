@@ -49,15 +49,23 @@ fi
 # 6️⃣ Verify installation
 echo "🔍 Checking key packages..."
 python - <<'PYCODE'
-import sys, pkg_resources
-for pkg in ["fastapi", "uvicorn", "python-dotenv", "openai"]:
+import sys
+packages = {
+    "fastapi": "fastapi",
+    "uvicorn": "uvicorn",
+    "python-dotenv": "dotenv",
+    "openai": "openai",
+}
+
+for label, import_name in packages.items():
     try:
-        __import__(pkg)
-        print(f"✅ {pkg} installed")
+        __import__(import_name)
+        print(f"✅ {label} installed")
     except ImportError:
-        print(f"❌ {pkg} missing")
+        print(f"❌ {label} missing (failed to import {import_name})")
         sys.exit(1)
 PYCODE
+
 
 # 7️⃣ Check for .env file
 echo ""
