@@ -51,10 +51,67 @@ for pkg in ["fastapi", "uvicorn", "python-dotenv", "openai"]:
         sys.exit(1)
 PYCODE
 
-# 7️⃣ Final message
+# 7️⃣ Check for .env file
 echo ""
-echo "🎯 Environment ready!"
-echo "Next step: run your app with:"
+echo "🔍 Checking for .env configuration file..."
+if [ ! -f ".env" ]; then
+  echo ""
+  echo "⚠️  =========================================="
+  echo "⚠️  IMPORTANT: .env file not found!"
+  echo "⚠️  =========================================="
+  echo ""
+  echo "📋 You need to create a .env file before running the app."
+  echo ""
+  echo "Quick Setup:"
+  echo "------------"
+  echo "1. Copy the example file:"
+  echo "   cp env.example .env"
+  echo ""
+  echo "2. Edit .env and add your OpenAI API key:"
+  echo "   nano .env"
+  echo "   (or use your preferred editor)"
+  echo ""
+  echo "3. Required configuration:"
+  echo "   OPENAI_API_KEY=sk-your-actual-api-key-here"
+  echo "   SYSTEM_PROMPT=You are a helpful assistant."
+  echo "   OPENAI_MODEL=gpt-4o-mini"
+  echo "   ENABLE_CONTEXT=true"
+  echo ""
+  echo "📚 For detailed instructions, see:"
+  echo "   • README.md (Quick Start section)"
+  echo "   • docs/QUICKSTART.md"
+  echo ""
+  echo "🔑 Get your OpenAI API key from:"
+  echo "   https://platform.openai.com/api-keys"
+  echo ""
+  echo "⚠️  The app will NOT work without a valid .env file!"
+  echo ""
+else
+  echo "✅ .env file found"
+  
+  # Check if API key is set (not the example value)
+  if grep -q "sk-your-api-key-here" .env 2>/dev/null || ! grep -q "OPENAI_API_KEY=sk-" .env 2>/dev/null; then
+    echo ""
+    echo "⚠️  WARNING: OPENAI_API_KEY may not be configured correctly"
+    echo "   Please edit .env and add your actual OpenAI API key"
+    echo "   Get your key from: https://platform.openai.com/api-keys"
+    echo ""
+  else
+    echo "✅ OPENAI_API_KEY appears to be configured"
+  fi
+fi
+
+# 8️⃣ Final message
 echo ""
-echo "   ./run.sh"
+echo "🎯 Environment setup complete!"
+echo ""
+if [ -f ".env" ] && grep -q "OPENAI_API_KEY=sk-" .env 2>/dev/null && ! grep -q "sk-your-api-key-here" .env 2>/dev/null; then
+  echo "✅ Ready to run! Start the app with:"
+  echo ""
+  echo "   ./run.sh"
+else
+  echo "⏳ Next steps:"
+  echo "   1. Create and configure your .env file (see above)"
+  echo "   2. Then run: ./run.sh"
+fi
 echo ""

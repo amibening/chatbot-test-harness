@@ -65,9 +65,10 @@ if lsof -i :$PORT > /dev/null 2>&1; then
   echo "⚠️  Port 8000 in use, switching to $PORT"
 fi
 
-# 8️⃣ Start the FastAPI app
+# 8️⃣ Activate virtual environment and start the FastAPI app
 echo "🚀 Starting FastAPI server on http://127.0.0.1:$PORT ..."
-PYTHONPATH=src uv run uvicorn backend.main:app --reload --port $PORT &
+source .venv/bin/activate
+PYTHONPATH=src uvicorn backend.main:app --reload --port $PORT &
 
 # Save the background process ID
 UVICORN_PID=$!

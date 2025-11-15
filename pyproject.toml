@@ -26,6 +26,10 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Tells Hatch which package directory to include
+[tool.hatch.build.targets.wheel]
+packages = ["src/backend"]
+
 [tool.uv]
 dev-dependencies = [
     "pytest>=8.0.0",
