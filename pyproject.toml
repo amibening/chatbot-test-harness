@@ -30,7 +30,7 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# FIX FOR ISSUE 1 — tells hatch exactly which code directory to package
+# This tells hatch exactly which code directory to package
 [tool.hatch.build.targets.wheel]
 packages = ["src/backend"]
 
