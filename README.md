@@ -41,6 +41,7 @@ ENABLE_CONTEXT=true
 ### 3. Run
 
 ```bash
+chmod +x run.sh
 ./run.sh
 ```
 
